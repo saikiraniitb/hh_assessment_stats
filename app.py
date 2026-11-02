@@ -90,7 +90,7 @@ def load_data(_client, ids):
     users = list(db.users.find({"_id": {"$in": mongo_ids(list(candidate_ids))}}, {"email": 1, "source": 1, "name": 1, "firstName": 1, "lastName": 1}))
     profiles = list(db.jobSeekerProfile.find({"_id": {"$in": mongo_ids(list(candidate_ids))}}, {"personal_info.firstName": 1, "personal_info.middleName": 1, "personal_info.lastName": 1, "personal_info.email": 1, "personal_info.phoneNumber": 1, "work_experience.currentLocation": 1, "work_experience.isCurrentlyWorking": 1, "completeResumeDetails.parsed_resume.ResumeParserData.Address.City": 1, "completeResumeDetails.parsed_resume.ResumeParserData.Address.State": 1}))
     # One upload may appear multiple times. Choose a candidate/contest-specific record without multiplying totals.
-    uploads = list(db.recruiterAddProfiles.find({"contestId": {"$in": cid_values}}, {"contestId": 1, "recruiterId": 1, "jobseekerDetails.jsId": 1, "jobseekerDetails.source": 1, "jobseekerDetails.createdAt": 1}))
+    uploads = list(db.recruiterAddProfiles.find({"contestId": {"$in": cid_values}}, {"contestId": 1, "recruiterId": 1, "jobseekerDetails.jsId": 1, "jobseekerDetails.source": 1, "jobseekerDetails.createdAt": 1, "jobseekerDetails.firstName": 1, "jobseekerDetails.lastName": 1, "jobseekerDetails.email": 1, "jobseekerDetails.phoneNumber": 1, "jobseekerDetails.scores.resumeMatch.OverallScore": 1, "jobseekerDetails.snsScoreResult.resumeMatch.OverallScore": 1, "jobseekerDetails.copilotScore": 1, "jobseekerDetails.mymapitInterview.sectionDetails.sectionName": 1, "jobseekerDetails.mymapitInterview.sectionDetails.marksScored": 1, "jobseekerDetails.mymapitInterview.sectionDetails.totalMarks": 1, "jobseekerDetails.mymapitInterview.completedAt": 1}))
     recruiter_ids = {sid(a.get("recruiterId")) for a in attempts if a.get("recruiterId")}
     recruiter_ids.update(sid(u.get("recruiterId")) for u in uploads if u.get("recruiterId"))
     recruiters = list(db.recruiterProfile.find({"_id": {"$in": mongo_ids(list(recruiter_ids))}}, {"basic_details.firstName": 1, "basic_details.middleName": 1, "basic_details.lastName": 1, "additionalData.display_name": 1}))
@@ -172,6 +172,12 @@ def build_rows(data):
             state = "🟡 MCQ in progress"
         else:
             state = "⚪ Not completed"
+        mapit = upload.get("mymapitInterview") or {}
+        sections = mapit.get("sectionDetails") or []
+        def section_score(kind):
+            matching = [sec for sec in sections if isinstance(sec, dict) and kind in str(sec.get("sectionName") or "").casefold()]
+            return matching[0].get("marksScored") if matching else None
+        resume_score = (upload.get("scores") or {}).get("resumeMatch") or (upload.get("snsScoreResult") or {}).get("resumeMatch") or {}
         rows.append({
             "Contest": titles.get(cid, cid), "Contest ID": cid,
             "Name": name_from(p, u),
@@ -190,6 +196,11 @@ def build_rows(data):
             "Application Status": m.get("applicationStatus") or "",
             "Slot Date": booking.get("slotDate", "") if booking else "",
             "Slot Time": booking.get("slotTime", "") if booking else "",
+            "JD to CV Match Score": resume_score.get("OverallScore"),
+            "Copilot Score": upload.get("copilotScore"),
+            "My Mapit MCQ": section_score("mcq"),
+            "My Mapit Coding": section_score("coding"),
+            "My Mapit Attempted Date": fmt_date(mapit.get("completedAt")),
             "Jobseeker ID": jid,
         })
     return pd.DataFrame(rows)
@@ -197,7 +208,7 @@ def build_rows(data):
 
 st.title("Hiringhood · Post-assessment Statistics")
 st.caption("Data Engineer Junior / Mid / Senior · read-only · 25-minute refresh")
-st.info("Copilot, My Mapit, and JD–CV score mappings are pending schema verification. Empty cells mean unavailable data, NOT zero or not attempted.")
+st.info("JD–CV, Copilot and My Mapit scores come from contest-specific recruiter uploads. A blank cell means no matched value; 0 means a recorded zero.")
 uri = os.getenv("MONGODB_URI", "")
 if not uri:
     try:
@@ -232,12 +243,12 @@ report = pd.DataFrame({
     "Recruiter Name": candidates["Recruiter Name"],
     "Email": candidates["Email"],
     "Phone Number": candidates["Phone Number"],
-    "JD to CV Match Score": pd.Series([None] * len(candidates), index=candidates.index, dtype="object"),
+    "JD to CV Match Score": candidates["JD to CV Match Score"],
     "HH MCQ": candidates["Score (%)"],
-    "Copilot Score": pd.Series([None] * len(candidates), index=candidates.index, dtype="object"),
-    "My Mapit MCQ": pd.Series([None] * len(candidates), index=candidates.index, dtype="object"),
-    "My Mapit Coding": pd.Series([None] * len(candidates), index=candidates.index, dtype="object"),
-    "My Mapit Attempted Date": pd.Series([None] * len(candidates), index=candidates.index, dtype="object"),
+    "Copilot Score": candidates["Copilot Score"],
+    "My Mapit MCQ": candidates["My Mapit MCQ"],
+    "My Mapit Coding": candidates["My Mapit Coding"],
+    "My Mapit Attempted Date": candidates["My Mapit Attempted Date"],
 })
 contest_options = list(report["Contest Name"].dropna().unique())
 selected = st.multiselect("Contests", contest_options, default=contest_options)
