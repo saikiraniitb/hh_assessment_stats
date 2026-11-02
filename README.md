@@ -10,7 +10,7 @@ Independent **post-assessment** Streamlit dashboard for three Data Engineer cont
 
 ## Status
 
-**Phase 1 scaffold.** Candidate/recruiter data and Hiringhood MCQ scores are joined using the existing verified `hh_registrations` logic. JD-to-CV, Copilot, My Mapit MCQ, My Mapit Coding and My Mapit attempt-date fields intentionally remain blank until source collections, join keys, and score scales are verified. Blank **does not** mean zero or not attempted.
+**Assessment integrations mapped.** Candidate/recruiter and HH MCQ data are joined from the registration sources. JD-to-CV, Copilot, and My Mapit MCQ/Coding/completedAt are sourced from contest-specific `recruiterAddProfiles.jobseekerDetails` entries. My Mapit section scores retain their native denominators (sample: MCQ /20, Coding /80). Blank **does not** mean zero or not attempted.
 
 ### Report columns (exact order)
 
@@ -32,6 +32,6 @@ Optional environment: `MONGO_DB` (Marketplace), `MATCHDAY_CONTEST_IDS` (comma-se
 
 This report contains sensitive candidate data. **Make this repository private** and deploy with application-level authentication/SSO and role-based access; a private repository alone does not secure Streamlit. Use a MongoDB read-only user, network restrictions, and Streamlit Secrets. Never commit connection strings or exported candidate reports.
 
-### Pending integration
+### Validation needed
 
-Map each external assessment's collection/API, candidate ID, contest/JD ID, assessment type, result field, score scale, timestamp, and latest-vs-best attempt rules. Prefer stable keys. Do not join people solely by name; assess email-based matching for collisions before enabling.
+Validate latest-upload precedence, duplicate candidate uploads, score coverage, recruiter attribution, and whether the latest scored MCQ attempt should be preferred over an in-progress attempt. This is read-only; validate live reporting behind authentication. No guessing or cross-contest reuse of scores.
